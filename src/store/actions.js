@@ -12,14 +12,19 @@ export const SELECT_DEST_ROOM = 'SELECT_DEST_ROOM';
 export const COPY_ZONES = 'COPY_ZONES';
 export const CREATE_MODULE_UNITENTRIES = 'CREATE_MODULE_UNITENTRIES';
 
+export const CREATE_ROOM = 'CREATE_ROOM';
+export const CREATE_ROOM_SUCCESS = 'CREATE_ROOM_SUCCESS';
+export const CREATE_ROOM_FAILURE = 'CREATE_ROOM_FAILURE';
+
 export const fetchSourceProject = (projectId) => ({
   type: FETCH_SOURCE_PROJECT,
   payload: projectId,
 });
 
-export const fetchDestProject = (projectId) => ({
+export const fetchDestProject = (projectId, { silent = false } = {}) => ({
   type: FETCH_DEST_PROJECT,
   payload: projectId,
+  silent,
 });
 
 export const selectRoom = (roomDetails) => ({
@@ -34,6 +39,12 @@ export const selectDestRoom = (roomDetails) => ({
 
 export const copyZones = (data, meta) => ({
   type: COPY_ZONES,
+  data,
+  meta,
+});
+
+export const createRoom = (data, meta) => ({
+  type: CREATE_ROOM,
   data,
   meta,
 });

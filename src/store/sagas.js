@@ -8,7 +8,11 @@ import {
   FETCH_DEST_PROJECT_FAILURE,
   CREATE_MODULE_UNITENTRIES,
   COPY_ZONES,
+  CREATE_ROOM,
+  CREATE_ROOM_SUCCESS,
+  CREATE_ROOM_FAILURE,
 } from './actions';
+import { buildRoomPayload } from '../utils/roomBuilder';
 import { apiRequest } from '../services/apiService';
 
 const BASE_URL = 'https://sc-backend-production.homelane.com/api/v1.0/project/'
@@ -357,6 +361,35 @@ function* rotateZone(action){
   }
 }
 
+function* createRoomSaga(action) {
+  try {
+    const { projectId, floorId, roomType, widthMm, lengthMm, floorRooms } = action.data;
+    const { wallsPayload, roomPayload } = buildRoomPayload(roomType, widthMm, lengthMm, floorRooms);
+
+    // Step 1 — create walls
+    yield call(
+      apiRequest,
+      `${BASE_URL}${projectId}/floor/${floorId}/walls`,
+      'POST',
+      wallsPayload
+    );
+
+    // Step 2 — create room (with those walls embedded)
+    yield call(
+      apiRequest,
+      `${BASE_URL}${projectId}/floors/${floorId}/room`,
+      'POST',
+      roomPayload
+    );
+
+    yield put({ type: CREATE_ROOM_SUCCESS });
+    if (action?.meta?.resolve) action.meta.resolve();
+  } catch (e) {
+    yield put({ type: CREATE_ROOM_FAILURE, payload: e?.message || 'Room creation failed' });
+    if (action?.meta?.reject) action.meta.reject(e);
+  }
+}
+
 export default function* rootSaga() {
   yield takeLatest(FETCH_SOURCE_PROJECT, fetchSourceProjectSaga);
   yield takeLatest(FETCH_DEST_PROJECT, fetchDestProjectSaga);
@@ -364,4 +397,5 @@ export default function* rootSaga() {
   // autofit
   yield takeLatest(CREATE_MODULE_UNITENTRIES, rotateZone);
   yield takeLatest(COPY_ZONES, copyRoomData);
+  yield takeLatest(CREATE_ROOM, createRoomSaga);
 }

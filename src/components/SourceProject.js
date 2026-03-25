@@ -157,6 +157,7 @@ const SourceProject = () => {
           selectedSourceRoom={selectedDestRoom}
           loading={destLoading}
           error={destError}
+          showCreateRoom
         />
       </div>
 
