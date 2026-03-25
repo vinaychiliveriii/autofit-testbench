@@ -9,6 +9,9 @@ import {
 } from '../store/actions';
 import ProjectPanel from './ProjectPanel';
 import { getRelativePositionsWrapper } from './AutoFit';
+import { runEvaluation } from '../evaluation/evaluator';
+import { computeScore } from '../evaluation/scoring';
+import EvaluationReport from './EvaluationReport';
 import toast from 'react-hot-toast';
 
 const STEPS = [
@@ -21,6 +24,8 @@ const SourceProject = () => {
   const [importError, setImportError] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(null); // null | 'computing' | 'copying' | 'done' | 'failed'
+  const [evaluationReport, setEvaluationReport] = useState(null);
+  const [angle, setAngle] = useState(0);
   const dispatch = useDispatch();
 
   const {
@@ -73,32 +78,50 @@ const SourceProject = () => {
 
     try {
       setImportLoading(true);
+      setEvaluationReport(null);
 
       // Step 1 — compute zones
       setCurrentStep('computing');
-      let zonesData = getRelativePositionsWrapper(
+      const intermediateData = getRelativePositionsWrapper(
         selectedSourceRoom.room,
         selectedDestRoom.room,
         sourceProjectDetails,
         destProjectDetails,
-        parseInt(0)
+        angle
       );
-      console.log('zonesData', zonesData);
-      zonesData = [zonesData];
+      console.log('zonesData', intermediateData);
+      const zonesData = [intermediateData];
 
       // Step 2 — copy zones
       setCurrentStep('copying');
-      if (zonesData?.length) {
-        const promises = zonesData.map((zone, keyIndex) =>
+      const results = await Promise.all(
+        zonesData.map((zone, keyIndex) =>
           new Promise((resolve, reject) => {
             dispatch(copyZones({ ...zone, keyIndex }, { resolve, reject }));
           })
-        );
-        await Promise.all(promises);
-      }
+        )
+      );
 
-      // Done
+      // Step 3 — evaluate
       setCurrentStep('done');
+      const { destRoom, apiStats } = results[0] || {};
+      const evalResult = runEvaluation({
+        sourceRoom:        selectedSourceRoom.room,
+        destRoom,
+        intermediateData,
+        apiStats,
+        sourceProjectData: sourceProjectDetails,
+        destProjectData:   destProjectDetails,
+      });
+      const report = computeScore(evalResult, {
+        sourceProjectId: selectedSourceRoom.projectId,
+        sourceRoomId:    selectedSourceRoom.roomId,
+        destProjectId:   selectedDestRoom.projectId,
+        destRoomId:      selectedDestRoom.roomId,
+        roomType:        selectedSourceRoom.roomType,
+      });
+      setEvaluationReport(report);
+      console.log('Evaluation report', report);
       toast.success('Rooms auto fitted successfully!');
     } catch (err) {
       setCurrentStep('failed');
@@ -120,6 +143,8 @@ const SourceProject = () => {
           selectedSourceRoom={selectedSourceRoom}
           loading={sourceLoading}
           error={sourceError}
+          showAngle
+          onAngleChange={setAngle}
         />
 
         <div style={{ width: 1, background: '#ddd', flexShrink: 0 }} />
@@ -195,6 +220,8 @@ const SourceProject = () => {
           <p style={{ color: '#ef4444', margin: 0, fontSize: 13 }}>{importError}</p>
         )}
       </div>
+
+      <EvaluationReport report={evaluationReport} />
     </div>
   );
 };

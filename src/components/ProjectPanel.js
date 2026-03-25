@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
 
+const ANGLES = [0, 90, 180, 270];
+
 const ProjectPanel = ({
   title,
   fetchAction,
@@ -9,7 +11,10 @@ const ProjectPanel = ({
   selectedSourceRoom,
   loading,
   error,
+  showAngle = false,
+  onAngleChange,
 }) => {
+  const [selectedAngle, setSelectedAngle] = useState(0);
   const [projectId, setProjectId] = useState('');
   const dispatch = useDispatch();
 
@@ -86,6 +91,25 @@ const ProjectPanel = ({
               <option key={room.roomId} value={room.roomId}>
                 {room.roomName}
               </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {showAngle && selectedSourceRoom && (
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Angle</label>
+          <select
+            value={selectedAngle}
+            onChange={(e) => {
+              const angle = parseInt(e.target.value);
+              setSelectedAngle(angle);
+              onAngleChange?.(angle);
+            }}
+            style={{ width: '100%', padding: '8px 12px', fontSize: 14, border: '1px solid #ccc', borderRadius: 4 }}
+          >
+            {ANGLES.map((a) => (
+              <option key={a} value={a}>{a}°</option>
             ))}
           </select>
         </div>

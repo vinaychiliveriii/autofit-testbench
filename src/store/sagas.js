@@ -197,14 +197,32 @@ function readjustZones(zonesMetaData, zoneData, scaleX, scaleZ, angle) {
 
 
 function* copyRoomData(action){
+  const startTime = Date.now();
+  const apiStats = {
+    copyRoomData: { status: null },
+    autoResize:   { total: 0, success: 0, failed: 0, skipped: 0, resizedZoneIds: [] },
+    transforms:   { total: 0, success: 0, failed: 0 },
+    lights:       { status: null },
+    latencyMs:    0,
+  };
+
   try{
       const {payload, projectDetails, objectId, scaleX, scaleY, assetDetails, cornerWallsAllignedZones, lightsPayload, keyIndex, angle} = action.data;
       const cornerWallsAllignedData = cornerWallsAllignedZones;
       const { projectId, floorId, roomId } = projectDetails;
 
-      const result = yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/room/${roomId}/copyRoomData`, "PUT", [payload]);
-      // add autoResize api
-      const updatedZoneMetaDataArray = getUpdatedZoneMetaData(cornerWallsAllignedData,result[0]?.unitEntries); 
+      // Step 1 — copy room data
+      let result;
+      try {
+        result = yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/room/${roomId}/copyRoomData`, "PUT", [payload]);
+        apiStats.copyRoomData.status = 200;
+      } catch(e) {
+        apiStats.copyRoomData.status = e?.status || 500;
+        throw e;
+      }
+
+      // Step 2 — autoResize + corner transforms
+      const updatedZoneMetaDataArray = getUpdatedZoneMetaData(cornerWallsAllignedData,result[0]?.unitEntries);
       for(let i=0; i < result[0]?.unitEntries?.length; i++){
         try {
             let zone = result[0]?.unitEntries[i];
@@ -218,11 +236,20 @@ function* copyRoomData(action){
                 }
                 let resizedResult = {}
                 if( presetResizeRequest.resizeWidth && !isCornerOrLoftZone(zoneMetaData)){
-                  resizedResult = yield call(apiRequest, `${BASE_URL}${projectId}/floor/${floorId}/room/${result[0].id}/unitEntry/${zone.objectId}/autoResize`, "PUT", presetResizeRequest);
+                  apiStats.autoResize.total++;
+                  try {
+                    resizedResult = yield call(apiRequest, `${BASE_URL}${projectId}/floor/${floorId}/room/${result[0].id}/unitEntry/${zone.objectId}/autoResize`, "PUT", presetResizeRequest);
+                    apiStats.autoResize.success++;
+                    apiStats.autoResize.resizedZoneIds.push(zone.objectId);
+                  } catch(resizeErr) {
+                    apiStats.autoResize.failed++;
+                  }
+                } else {
+                  apiStats.autoResize.skipped++;
                 }
                 if(zoneMetaData?.cornerTouch?.length>0 && angle === 0){
                     const is90Or270degree = [90,270].some(angle => angle == zoneAbsRotation);
-                   
+
                     let differenceWidth =  (resizedResult?.widthAfterResize??zone.assets.width)/2;
                     let zonePosition = zone.position;
                     if(zoneMetaData.cornerTouch.length>0 && angle === 0){
@@ -239,7 +266,7 @@ function* copyRoomData(action){
                       }
                       if(corner == "front-left"){
                         zone.position.x += xShift;
-                        zone.position.z -= zShift; 
+                        zone.position.z -= zShift;
                       }
                       if(corner == "front-right"){
                         zone.position.x -= xShift;
@@ -248,50 +275,74 @@ function* copyRoomData(action){
                     }
                     let transformPositions = {
                             "position": zonePosition,
-                            "scale": {
-                              ...zone.scale
-                            },
-                            "rotation": {
-                                ...zone.rotation,
-                            }
+                            "scale": { ...zone.scale },
+                            "rotation": { ...zone.rotation },
                           }
-                    yield call(rotateZone, {data: {transformPositions, projectDetails, objectId:zone.objectId}})
+                    apiStats.transforms.total++;
+                    try {
+                      yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/rooms/${roomId}/unitEntries/${zone.objectId}/transform`, 'PUT', transformPositions);
+                      apiStats.transforms.success++;
+                    } catch(tErr) {
+                      apiStats.transforms.failed++;
+                      console.log(tErr);
+                    }
                 }
             }
         } catch (error) {
             console.error(`Failed to process unit entry at index ${i}:`, error);
-            continue; // Continue with next iteration even if current one fails
+            continue;
         }
       }
+
       yield delay(500)
       const projectData = yield call(apiRequest, `${BASE_URL}${projectId}`, "GET");
 
-          // const projectData = yield call(SpacecraftBackendClient.get, `/api/v1.0/project/${projectId}`);
           if(angle === 0){
             const currentFloor = projectData?.floors.find((i) => (i.id === floorId)) || result.floors[0];
             const targetRoom = currentFloor
             ? currentFloor.rooms.find((i) => i.id === result[0].id) || {}
             : {};
-            const fittedFurniture = targetRoom?.unitEntries//.filter(unit=>unit.unitEntryType ==="FITTED_FURNITURE")
+            const fittedFurniture = targetRoom?.unitEntries
             const readjustedZones = readjustZones(updatedZoneMetaDataArray,fittedFurniture,scaleX,scaleY,angle);
             console.log('readjustedZones', readjustedZones);
             if(readjustedZones && Object.keys(readjustedZones)?.length > 0){
-  
                 for(let i=0; i < Object.values(readjustedZones)?.length; i++){
                     let reZn = Object.values(readjustedZones)?.[i];
-                    yield call(rotateZone, {data: {transformPositions: reZn, projectDetails, objectId:reZn.objectId}})
-                }               
+                    apiStats.transforms.total++;
+                    try {
+                      yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/rooms/${roomId}/unitEntries/${reZn.objectId}/transform`, 'PUT', reZn);
+                      apiStats.transforms.success++;
+                    } catch(tErr) {
+                      apiStats.transforms.failed++;
+                      console.log(tErr);
+                    }
+                }
             }
           }
-         
+
       yield delay(1500)
-      
+
       if(keyIndex === 0 && lightsPayload?.lights?.length > 0){
-        yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/rooms/${roomId}/settings/lights`, "PUT", lightsPayload);
+        try {
+          yield call(apiRequest, `${BASE_URL}${projectId}/floors/${floorId}/rooms/${roomId}/settings/lights`, "PUT", lightsPayload);
+          apiStats.lights.status = 200;
+        } catch(lErr) {
+          apiStats.lights.status = lErr?.status || 500;
+        }
+      } else {
+        apiStats.lights.status = 'skipped';
       }
-      if (action?.meta?.resolve) action?.meta.resolve();
+
+      // Final GET — captures the definitive state after all transforms
+      const finalProjectData = yield call(apiRequest, `${BASE_URL}${projectId}`, "GET");
+      const finalFloor = finalProjectData?.floors?.find((f) => f.id === floorId);
+      const finalDestRoom = finalFloor ? finalFloor.rooms?.find((r) => r.id === result[0].id) || {} : {};
+
+      apiStats.latencyMs = Date.now() - startTime;
+      if (action?.meta?.resolve) action?.meta.resolve({ destRoom: finalDestRoom, apiStats });
   }catch(e){
     console.log(e);
+    apiStats.latencyMs = Date.now() - startTime;
     if (action?.meta?.reject) action?.meta.reject(e);
   }
 }

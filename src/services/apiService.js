@@ -5,7 +5,7 @@ export const apiRequest = async (endpoint, method = "GET", body = null, hideToas
     method,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": 'eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjoiUk9MRV9ERVNJR05FUiIsInByb2plY3QiOiI5MTUxNGI0YS01OTEyLTQ0NWYtOGY4ZS0zZGYwMTI4MzdkZTEiLCJlbWFpbCI6ImFraGlsZXNoLnNAaG9tZWxhbmUuY29tIiwib3BlbiI6ZmFsc2UsInN1YiI6ImFraGlsZXNoLnNAaG9tZWxhbmUuY29tIiwiaWF0IjoxNzc0MzUwNTUxLCJleHAiOjE3NzQ0MzY5NTF9.6uaumozcmcVQBn8896Y222X2sRiX1rouUbA69sH_WOoeFQaU2cxxJUDw7Dwag0TfyOSf27BL4E1j5DJmSDG9vw',
+      "Authorization": 'eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjoiUk9MRV9ERVNJR05FUiIsInByb2plY3QiOiI0NjFkZTg1Yy05NTE5LTQ4N2UtOGQ4ZS03NzY1MzRlYjY4YTUiLCJlbWFpbCI6ImFraGlsZXNoLnNAaG9tZWxhbmUuY29tIiwib3BlbiI6ZmFsc2UsInN1YiI6ImFraGlsZXNoLnNAaG9tZWxhbmUuY29tIiwiaWF0IjoxNzc0NDA3MjYwLCJleHAiOjE4MDU5NDMyNjB9.ij-9dQdIfNFcY8DUI54iRpgy0EPEU63YUb3rV5roba_viZfOMUff-b1oE1vYbQfWJo64-m-2IL1m3JS-wDdFuQ',
     //   endpoint?.includes('rosters') ? `Bearer ${localStorage.getItem('roster_project_token')}`  || '' : localStorage.getItem('sc_project_token') || '',
       "source": "Spacecraft",
     },
