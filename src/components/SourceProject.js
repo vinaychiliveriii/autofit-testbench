@@ -54,6 +54,11 @@ const SourceProject = () => {
 
     const srcPrice = selectedSourceRoom.roomPriceTotal?.totalPrice ?? 0;
     const srcEntries = selectedSourceRoom.unitEntries ?? [];
+    const isDecoRoom = srcEntries.some((src) => src.unitEntryType != "DUMMY" && src?.subCategoryName?.toLowerCase()?.includes('decko'));
+    if(isDecoRoom) {
+      setImportError('Source room must be HL');
+      return;
+    }
     if (srcPrice <= 0) {
       setImportError('Source room must have a price greater than 0.');
       return;
@@ -126,6 +131,7 @@ const SourceProject = () => {
     } catch (err) {
       setCurrentStep('failed');
       setImportError(err?.message || 'Auto-fit failed. Please try again.');
+      console.error('Auto-fit failed', err);
       toast.error('Auto-fit failed.');
     } finally {
       setImportLoading(false);

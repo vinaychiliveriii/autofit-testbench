@@ -12,6 +12,16 @@ const getRoomBounds = (room) => ({
 });
 
 const getZoneEdges = (zone) => {
+  if (!zone?.assets?.width || !zone?.assets?.length) {
+    // console.log(`Zone ${zone?.name || zone?.objectId} is missing width or length info`, zone);
+    return {
+      xLeft:  0,
+      xRight: 0,
+      zBack:  0,
+      zFront: 0,
+    };
+  }
+
   const absRot = Math.round(Math.abs(zone.rotation?.y ?? 0));
   const isRotated = absRot === 90 || absRot === 270;
   const w = isRotated ? zone.assets.length : zone.assets.width;
@@ -41,6 +51,7 @@ const checkA1_inBounds = (destRoom, destZones) => {
   const failedZones = [];
 
   destZones.forEach(zone => {
+    if(zone.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
     const e = getZoneEdges(zone);
     const violations = [];
     if (e.xLeft  < bounds.xMin) violations.push({ edge: 'left',  overshootBy: Math.round(bounds.xMin - e.xLeft) });
@@ -61,6 +72,7 @@ const checkA2_wallSnapAccuracy = (sourceZoneMeta, destZones, destRoom) => {
     if (!srcMeta.wallTouch) return;
     const destZone = destZones.find(z => z.copiedUnitEntryId === srcMeta.objectId);
     if (!destZone) return;
+    if(destZone.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
 
     const e = getZoneEdges(destZone);
     const distMap = { left: Math.abs(bounds.xMin - e.xLeft), right: Math.abs(bounds.xMax - e.xRight), back: Math.abs(bounds.zMin - e.zBack), front: Math.abs(bounds.zMax - e.zFront) };
@@ -83,6 +95,7 @@ const checkA3_cornerSnapAccuracy = (sourceZoneMeta, destZones, destRoom) => {
     const expectedCorner = srcMeta.cornerTouch[0];
     const destZone = destZones.find(z => z.copiedUnitEntryId === srcMeta.objectId);
     if (!destZone) return;
+    if(destZone.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
 
     const actualCorner = detectCorner(getZoneEdges(destZone), bounds);
     if (actualCorner !== expectedCorner) {
@@ -129,6 +142,7 @@ const checkA5_moduleOutOfBounds = (destRoom, destZones) => {
   const failedModules = [];
 
   destZones.forEach(zone => {
+    if(zone.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
     (zone.miqModules || []).forEach(module => {
       const absX = zone.position.x + (module.position_x ?? 0);
       const absZ = zone.position.z + (module.position_z ?? 0);
@@ -174,6 +188,7 @@ const checkB3_noOverlaps = (destZones) => {
   const pairs = [];
   for (let i = 0; i < destZones.length; i++) {
     for (let j = i + 1; j < destZones.length; j++) {
+      if(destZones[i].unitEntryType === "CUSTOM_FITTED_FURNITURE" || destZones[j].unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
       const a = getZoneEdges(destZones[i]);
       const b = getZoneEdges(destZones[j]);
       const overlapping = !(a.xRight <= b.xLeft || b.xRight <= a.xLeft || a.zFront <= b.zBack || b.zFront <= a.zBack);
@@ -208,6 +223,9 @@ const checkB4_neighborGaps = (sourceZoneMeta, destZones) => {
 
       const destB = destZones.find(z => z.copiedUnitEntryId === neighbor.objectId);
       if (!destB) return;
+      if(destA.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
+      if(destB.unitEntryType === "CUSTOM_FITTED_FURNITURE") return;
+
 
       const eA = getZoneEdges(destA);
       const eB = getZoneEdges(destB);

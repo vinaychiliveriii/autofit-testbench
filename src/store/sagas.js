@@ -36,32 +36,44 @@ function* fetchDestProjectSaga(action) {
 }
 
 function isCornerOrLoftZone (zoneMetaData){
-  return (zoneMetaData?.isLCornerZone || zoneMetaData?.isLoftZone);
+  try {
+    return (zoneMetaData?.isLCornerZone || zoneMetaData?.isLoftZone);
+  } catch(e) {
+    console.error('isCornerOrLoftZone error:', e);
+  }
 }
 
 const getUpdatedZoneMetaData = (cornerWallsAllignedData,zones) =>{
-  const updatedMetaData = [];
-  for(let i=0;i<zones.length;i++){
-    const zoneMeta = cornerWallsAllignedData.find(zoneMeta => zoneMeta.objectId===zones[i].copiedUnitEntryId);
-    updatedMetaData.push({...zoneMeta,objectId:zones[i].objectId});
+  try {
+    const updatedMetaData = [];
+    for(let i=0;i<zones.length;i++){
+      const zoneMeta = cornerWallsAllignedData.find(zoneMeta => zoneMeta.objectId===zones[i].copiedUnitEntryId);
+      updatedMetaData.push({...zoneMeta,objectId:zones[i].objectId});
+    }
+    return updatedMetaData;
+  } catch(e) {
+    console.error('getUpdatedZoneMetaData error:', e);
   }
-  return updatedMetaData;
 }
 
 function zoneExtremes(zone){
-  const {rotation, assets, position} = zone;
-  let zoneRotation = rotation.y;
-  // let position = position || {x: parseFloat(assets.location.split(' ')[0]), z: parseFloat(assets.location.split(' ')[1])}
-  const zoneWidth = assets.width ;
-  const zoneLength = assets.length;
-  const absRotation = Math.abs(zoneRotation);
-  const width = [90,270].some(angle=> angle == absRotation)?zoneLength:zoneWidth;
-  const length = [90,270].some(angle=> angle == absRotation)?zoneWidth:zoneLength;
-  let xLeft = position.x - width / 2;//zone left
-  let xRight = position.x + width / 2;//zone right
-  let yBottom = position.z - length / 2;//
-  let yTop = position.z + length / 2;
-  return {xLeft,xRight,yBottom,yTop}
+  try {
+    const {rotation, assets, position} = zone;
+    let zoneRotation = rotation.y;
+    // let position = position || {x: parseFloat(assets.location.split(' ')[0]), z: parseFloat(assets.location.split(' ')[1])}
+    const zoneWidth = assets.width ;
+    const zoneLength = assets.length;
+    const absRotation = Math.abs(zoneRotation);
+    const width = [90,270].some(angle=> angle == absRotation)?zoneLength:zoneWidth;
+    const length = [90,270].some(angle=> angle == absRotation)?zoneWidth:zoneLength;
+    let xLeft = position.x - width / 2;//zone left
+    let xRight = position.x + width / 2;//zone right
+    let yBottom = position.z - length / 2;//
+    let yTop = position.z + length / 2;
+    return {xLeft,xRight,yBottom,yTop}
+  } catch(e) {
+    console.error('zoneExtremes error:', e);
+  }
 }
 
 function readjustZones(zonesMetaData, zoneData, scaleX, scaleZ, angle) {
@@ -77,7 +89,9 @@ function readjustZones(zonesMetaData, zoneData, scaleX, scaleZ, angle) {
     const allZones = Object.values(zoneData);
 
     const zoneQueue = [];
-    const filteredZoneMeta = zonesMetaData.filter(z => z.modules.length > 0);
+    const filteredZoneMeta = zonesMetaData.filter(z =>
+      Array.isArray(z?.modules) && z.modules.length > 0
+    );
     const lCornerZones = filteredZoneMeta.filter(zoneMeta => zoneMeta.isLCornerZone);
     const cornerZones = filteredZoneMeta.filter(zoneMeta => !zoneMeta.isLCornerZone && zoneMeta.cornerTouch.length > 0);
     const remainingZones = filteredZoneMeta.filter(zoneMeta => !zoneMeta.isLCornerZone && zoneMeta.cornerTouch.length === 0);
@@ -99,68 +113,80 @@ function readjustZones(zonesMetaData, zoneData, scaleX, scaleZ, angle) {
     }
 
     const adjustZonePosition = (actualZone, offsetX, offsetZ) => {
-      updateZoneData[actualZone.name] = {
-        position: {
-          ...actualZone.position,
-          x: actualZone.position.x + offsetX,
-          z: actualZone.position.z + offsetZ,
-        },
-        scale: { ...actualZone.scale },
-        rotation: { ...actualZone.rotation },
-        objectId: actualZone.objectId,
-      };
+      try {
+        updateZoneData[actualZone.name] = {
+          position: {
+            ...actualZone.position,
+            x: actualZone.position.x + offsetX,
+            z: actualZone.position.z + offsetZ,
+          },
+          scale: { ...actualZone.scale },
+          rotation: { ...actualZone.rotation },
+          objectId: actualZone.objectId,
+        };
+      } catch(e) {
+        console.error('adjustZonePosition error:', e);
+      }
     };
     const processPropInsideZones = ({ modulePropPositions, zone }) => {
-      const { position, miqModules } = zone;
+      try {
+        const { miqModules } = zone;
 
-      // Iterate over each module in modulePropPositions
-      Object.keys(modulePropPositions).forEach(moduleName => {
-        const moduleData = modulePropPositions[moduleName]; // Get the module data
-        const module = miqModules.find(m => m.moduleName === moduleName); // Find the corresponding module in miqModules
+        // Iterate over each module in modulePropPositions
+        Object.keys(modulePropPositions).forEach(moduleName => {
+          const moduleData = modulePropPositions[moduleName]; // Get the module data
+          const module = miqModules.find(m => m.moduleName === moduleName); // Find the corresponding module in miqModules
 
-        if (module) {
-          const modulePosition = {
-            x: module.position_x + zone.position.x,
-            y: module.position_y + zone.position.y,
-            z: module.position_z + zone.position.z
-          };
+          if (module) {
+            const modulePosition = {
+              x: module.position_x + zone.position.x,
+              y: module.position_y + zone.position.y,
+              z: module.position_z + zone.position.z
+            };
 
-          // Iterate over top, bottom, and inside arrays
-          ['top', 'bottom', 'inside'].forEach(prop => {
-            moduleData[prop].forEach(neighbor => {
-              if (!zoneMap[neighbor.zoneName]) {
-                zoneMap[neighbor.zoneName] = true;
-                const actualZone = allZones.find(zD => zD.name === neighbor.zoneName);
-                neighbor.position = {
-                  x: modulePosition.x + neighbor.propRelativePosition.x,
-                  y: modulePosition.y + neighbor.propRelativePosition.y,
-                  z: modulePosition.z + neighbor.propRelativePosition.z
-                };
-                updateZoneData[actualZone.name] = {
-                  position: neighbor.position,
-                  scale: { ...actualZone.scale },
-                  rotation: { ...actualZone.rotation },
-                  objectId: actualZone.objectId,
-                };
-              }
+            // Iterate over top, bottom, and inside arrays
+            ['top', 'bottom', 'inside'].forEach(prop => {
+              moduleData[prop].forEach(neighbor => {
+                if (!zoneMap[neighbor.zoneName]) {
+                  zoneMap[neighbor.zoneName] = true;
+                  const actualZone = allZones.find(zD => zD.name === neighbor.zoneName);
+                  neighbor.position = {
+                    x: modulePosition.x + neighbor.propRelativePosition.x,
+                    y: modulePosition.y + neighbor.propRelativePosition.y,
+                    z: modulePosition.z + neighbor.propRelativePosition.z
+                  };
+                  updateZoneData[actualZone.name] = {
+                    position: neighbor.position,
+                    scale: { ...actualZone.scale },
+                    rotation: { ...actualZone.rotation },
+                    objectId: actualZone.objectId,
+                  };
+                }
+              });
             });
-          });
-        }
-      });
+          }
+        });
+      } catch(e) {
+        console.error('processPropInsideZones error:', e);
+      }
     }
     const processNeighbor = (neighbors, positionKey, zoneValue, neighborValue) => {
-      neighbors.forEach((z) => {
-        const actualZone = allZones.find(zD => zD.name === z.zoneName);
-        if (actualZone && !zoneMap[actualZone.name]) {
-          zoneMap[actualZone.name] = true;
-          const zoneExt = zoneExtremes(actualZone);
-          const offset = zoneValue - zoneExt[neighborValue];
+      try {
+        neighbors.forEach((z) => {
+          const actualZone = allZones.find(zD => zD.name === z.zoneName);
+          if (actualZone && !zoneMap[actualZone.name]) {
+            zoneMap[actualZone.name] = true;
+            const zoneExt = zoneExtremes(actualZone);
+            const offset = zoneValue - zoneExt[neighborValue];
 
-          adjustZonePosition(actualZone, positionKey === "x" ? offset : 0, positionKey === "z" ? offset : 0);
-          const newZoneMetaData = filteredZoneMeta.find(meta => meta.zoneName === actualZone.name); // Add to queue
-          if (newZoneMetaData) zoneQueue.push(newZoneMetaData);
-        }
-      });
+            adjustZonePosition(actualZone, positionKey === "x" ? offset : 0, positionKey === "z" ? offset : 0);
+            const newZoneMetaData = filteredZoneMeta.find(meta => meta.zoneName === actualZone.name); // Add to queue
+            if (newZoneMetaData) zoneQueue.push(newZoneMetaData);
+          }
+        });
+      } catch(e) {
+        console.error('processNeighbor error:', e);
+      }
     };
 
     // BFS traversal to process all connected zones
